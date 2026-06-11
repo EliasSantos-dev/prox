@@ -76,17 +76,50 @@ pub fn snapshot() -> io::Result<Vec<PortEntry>> {
 
 fn build_inode_map() -> HashMap<u64, Process> {
     let mut map = HashMap::new();
+
+    // Read /etc/passwd once and build uid -> username lookup table.
+    let passwd_map: HashMap<u32, String> = std::fs::read_to_string("/etc/passwd")
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| {
+            let mut f = line.split(':');
+            let nm = f.next()?.to_string();
+            let _passwd = f.next()?;
+            let uid: u32 = f.next()?.parse().ok()?;
+            Some((uid, nm))
+        })
+        .collect();
+
     let Ok(procs) = procfs::process::all_processes() else {
         return map;
     };
     for p in procs.flatten() {
+        // First, collect socket inodes for this process.
+        // Only pay the cost of stat/cmdline/uid resolution if there are any.
+        let Ok(fds) = p.fd() else { continue };
+        let socket_inodes: Vec<u64> = fds
+            .flatten()
+            .filter_map(|fd| {
+                if let procfs::process::FDTarget::Socket(inode) = fd.target {
+                    Some(inode)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if socket_inodes.is_empty() {
+            continue;
+        }
+
+        // This process owns at least one socket — now resolve its metadata.
         let Ok(stat) = p.stat() else { continue };
         let name = stat.comm.clone();
         let cmdline = p.cmdline().ok().map(|v| v.join(" ")).unwrap_or_default();
         let user = p
             .uid()
             .ok()
-            .and_then(uzers_name)
+            .map(|uid| uid_to_username(uid, &passwd_map))
             .unwrap_or_else(|| "?".into());
         let process = Process {
             pid: p.pid(),
@@ -94,29 +127,20 @@ fn build_inode_map() -> HashMap<u64, Process> {
             cmdline,
             user,
         };
-        if let Ok(fds) = p.fd() {
-            for fd in fds.flatten() {
-                if let procfs::process::FDTarget::Socket(inode) = fd.target {
-                    map.entry(inode).or_insert_with(|| process.clone());
-                }
-            }
+
+        // First process to claim a given inode wins.
+        for inode in socket_inodes {
+            map.entry(inode).or_insert_with(|| process.clone());
         }
     }
     map
 }
 
-fn uzers_name(uid: u32) -> Option<String> {
-    let content = std::fs::read_to_string("/etc/passwd").ok()?;
-    for line in content.lines() {
-        let mut f = line.split(':');
-        let nm = f.next()?;
-        let _passwd = f.next()?;
-        let line_uid: u32 = f.next()?.parse().ok()?;
-        if line_uid == uid {
-            return Some(nm.to_string());
-        }
-    }
-    Some(uid.to_string())
+fn uid_to_username(uid: u32, passwd_map: &HashMap<u32, String>) -> String {
+    passwd_map
+        .get(&uid)
+        .cloned()
+        .unwrap_or_else(|| uid.to_string())
 }
 
 #[cfg(test)]
