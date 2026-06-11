@@ -1,3 +1,4 @@
+mod app;
 mod collector;
 mod model;
 
