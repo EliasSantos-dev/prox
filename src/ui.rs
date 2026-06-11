@@ -68,8 +68,7 @@ pub fn render(f: &mut Frame, app: &App) {
     f.render_widget(Paragraph::new(filter_line), chunks[1]);
 
     let help = match app.mode {
-        Mode::ConfirmKill => {
-            let pid = app.pending_kill.unwrap_or(0);
+        Mode::ConfirmKill(pid) => {
             format!("Matar PID {pid}? (s/n)")
         }
         _ => app.status.clone().unwrap_or_else(|| {

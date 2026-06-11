@@ -4,7 +4,7 @@ use crate::model::{filter, sort, PortEntry, SortKey};
 pub enum Mode {
     Normal,
     Filtering,
-    ConfirmKill,
+    ConfirmKill(i32),
 }
 
 /// Eventos de alto nível que o app entende (desacoplado do crossterm).
@@ -33,8 +33,6 @@ pub struct App {
     pub sort_key: SortKey,
     pub status: Option<String>,
     pub should_quit: bool,
-    /// PID a matar, definido ao entrar em ConfirmKill.
-    pub pending_kill: Option<i32>,
 }
 
 impl App {
@@ -48,7 +46,6 @@ impl App {
             sort_key: SortKey::Port,
             status: None,
             should_quit: false,
-            pending_kill: None,
         };
         app.recompute();
         app
@@ -102,14 +99,12 @@ impl App {
             }
             Event::RequestKill => {
                 if let Some(p) = self.selected_entry().and_then(|e| e.process.as_ref()) {
-                    self.pending_kill = Some(p.pid);
-                    self.mode = Mode::ConfirmKill;
+                    self.mode = Mode::ConfirmKill(p.pid);
                 } else {
                     self.status = Some("Sem processo associado para matar".into());
                 }
             }
             Event::ConfirmNo => {
-                self.pending_kill = None;
                 self.mode = Mode::Normal;
             }
             Event::ConfirmYes => {
@@ -186,8 +181,7 @@ mod tests {
     fn request_kill_enters_confirm_with_pid() {
         let mut a = app();
         a.on_event(Event::RequestKill);
-        assert_eq!(a.mode, Mode::ConfirmKill);
-        assert_eq!(a.pending_kill, Some(42));
+        assert_eq!(a.mode, Mode::ConfirmKill(42));
     }
 
     #[test]
@@ -196,7 +190,28 @@ mod tests {
         a.on_event(Event::RequestKill);
         a.on_event(Event::ConfirmNo);
         assert_eq!(a.mode, Mode::Normal);
-        assert_eq!(a.pending_kill, None);
+    }
+
+    #[test]
+    fn request_kill_without_process_sets_status_and_stays_normal() {
+        let mut a = App::new(vec![PortEntry {
+            port: 9999,
+            protocol: Protocol::Tcp,
+            process: None,
+        }]);
+        a.on_event(Event::RequestKill);
+        assert_eq!(a.mode, Mode::Normal);
+        assert!(a.status.is_some());
+    }
+
+    #[test]
+    fn refresh_with_shorter_list_clamps_selection() {
+        let mut a = app();
+        a.on_event(Event::Down); // selected = 1
+        assert_eq!(a.selected, 1);
+        a.on_event(Event::Refreshed(vec![entry(3000, "node", 42)])); // only 1 entry now
+        assert!(a.selected < a.visible.len().max(1));
+        assert_eq!(a.selected, 0);
     }
 
     #[test]

@@ -57,10 +57,18 @@ fn run<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> io::Result<(
                         continue;
                     }
                     if let Some(ev) = map_key(&app.mode, key.code) {
-                        let confirm = ev == Event::ConfirmYes;
+                        let kill_pid = if ev == Event::ConfirmYes {
+                            if let Mode::ConfirmKill(pid) = app.mode {
+                                Some(pid)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
                         app.on_event(ev);
-                        if confirm {
-                            do_kill(&mut app);
+                        if let Some(pid) = kill_pid {
+                            do_kill(&mut app, pid);
                         }
                     }
                 }
@@ -79,7 +87,7 @@ fn run<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> io::Result<(
 
 fn map_key(mode: &Mode, code: KeyCode) -> Option<Event> {
     match mode {
-        Mode::ConfirmKill => match code {
+        Mode::ConfirmKill(_) => match code {
             KeyCode::Char('s') | KeyCode::Char('y') => Some(Event::ConfirmYes),
             KeyCode::Char('n') | KeyCode::Esc => Some(Event::ConfirmNo),
             _ => None,
@@ -103,14 +111,13 @@ fn map_key(mode: &Mode, code: KeyCode) -> Option<Event> {
     }
 }
 
-fn do_kill(app: &mut App) {
-    let Some(pid) = app.pending_kill.take() else {
-        return;
-    };
+fn do_kill(app: &mut App, pid: i32) {
     use actions::KillOutcome;
     let outcome = actions::term(pid);
     app.status = Some(match outcome {
         KillOutcome::Terminated => {
+            // Brief intentional block: give the process time to exit after SIGTERM
+            // before checking whether to escalate to SIGKILL. Acceptable for MVP.
             std::thread::sleep(Duration::from_millis(300));
             if procfs::process::Process::new(pid).is_ok() {
                 match actions::force(pid) {
