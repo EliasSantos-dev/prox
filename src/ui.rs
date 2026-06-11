@@ -22,7 +22,12 @@ pub fn render(f: &mut Frame, app: &App) {
 
     let rows = app.visible.iter().enumerate().map(|(i, e)| {
         let (pid, name, user, cmd) = match &e.process {
-            Some(p) => (p.pid.to_string(), p.name.clone(), p.user.clone(), p.cmdline.clone()),
+            Some(p) => (
+                p.pid.to_string(),
+                p.name.clone(),
+                p.user.clone(),
+                p.cmdline.clone(),
+            ),
             None => ("-".into(), "-".into(), "-".into(), "-".into()),
         };
         let style = if i == app.selected {
@@ -67,10 +72,9 @@ pub fn render(f: &mut Frame, app: &App) {
             let pid = app.pending_kill.unwrap_or(0);
             format!("Matar PID {pid}? (s/n)")
         }
-        _ => app
-            .status
-            .clone()
-            .unwrap_or_else(|| "↑↓ mover  / filtrar  K matar  s ordenar  r recarregar  q sair".into()),
+        _ => app.status.clone().unwrap_or_else(|| {
+            "↑↓ mover  / filtrar  K matar  s ordenar  r recarregar  q sair".into()
+        }),
     };
     f.render_widget(Paragraph::new(Line::from(help)), chunks[2]);
 }

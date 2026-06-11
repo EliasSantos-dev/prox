@@ -105,9 +105,31 @@ mod tests {
 
     fn dataset() -> Vec<PortEntry> {
         vec![
-            PortEntry { port: 5432, protocol: Protocol::Tcp, process: Some(Process { pid: 10, name: "postgres".into(), cmdline: "/usr/bin/postgres".into(), user: "postgres".into() }) },
-            PortEntry { port: 3000, protocol: Protocol::Tcp, process: Some(Process { pid: 42, name: "node".into(), cmdline: "npm run dev".into(), user: "elias".into() }) },
-            PortEntry { port: 6379, protocol: Protocol::Tcp, process: None },
+            PortEntry {
+                port: 5432,
+                protocol: Protocol::Tcp,
+                process: Some(Process {
+                    pid: 10,
+                    name: "postgres".into(),
+                    cmdline: "/usr/bin/postgres".into(),
+                    user: "postgres".into(),
+                }),
+            },
+            PortEntry {
+                port: 3000,
+                protocol: Protocol::Tcp,
+                process: Some(Process {
+                    pid: 42,
+                    name: "node".into(),
+                    cmdline: "npm run dev".into(),
+                    user: "elias".into(),
+                }),
+            },
+            PortEntry {
+                port: 6379,
+                protocol: Protocol::Tcp,
+                process: None,
+            },
         ]
     }
 

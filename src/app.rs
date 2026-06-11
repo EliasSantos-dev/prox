@@ -132,7 +132,12 @@ mod tests {
         PortEntry {
             port,
             protocol: Protocol::Tcp,
-            process: Some(Process { pid, name: name.into(), cmdline: "".into(), user: "elias".into() }),
+            process: Some(Process {
+                pid,
+                name: name.into(),
+                cmdline: "".into(),
+                user: "elias".into(),
+            }),
         }
     }
 
